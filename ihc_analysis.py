@@ -2,6 +2,9 @@
 Aidan Ross - TDI
 @author: Aidan Ross
 """
+import csv
+import os
+import errno
 
 import glob
 import numpy as np
@@ -13,30 +16,30 @@ from skimage.exposure import rescale_intensity
 from skimage.color import rgb2hed
 from skimage.util import img_as_float, img_as_uint
 from skimage.segmentation import felzenszwalb, mark_boundaries
-from skimage.measure import regionprops, label
+from skimage.measure import regionprops
+from skimage.morphology import label, remove_small_objects, remove_small_holes
 from mahotas import otsu
 
 
 def color_conversion(img_files):
 
-    for i, im in enumerate(img_files):
-        ihc_rgb = skimage.io.imread(im)
-        ihc_hed = rgb2hed(ihc_rgb)
-        return ihc_rgb, ihc_hed, i
+    ihc_rgb = skimage.io.imread(im)
+    ihc_hed = rgb2hed(ihc_rgb)
+    
+    return ihc_rgb, ihc_hed
 
+def rescale(img):
 
-def rescale(img_files):
-
-    original_img, rescale_img, i = color_conversion(img_files)
+    original_img, rescale_img = color_conversion(img)
     rescale = rescale_intensity(rescale_img[:, :, 2], out_range=(0,1))
     int_img = img_as_uint(rescale)
 
     return int_img
 
 
-def create_bin(img_files):
+def create_bin(img):
 
-    int_img = rescale(img_files)
+    int_img = rescale(img)
     t_otsu = otsu(int_img)
     bin = (int_img >= t_otsu)
     float_img = img_as_float(bin)
@@ -44,11 +47,12 @@ def create_bin(img_files):
     return float_img
 
 
-def segment(img_files):
+def segment(img):
 
-    img = create_bin(img_files)
+    img = create_bin(img)
     fz_seg = felzenszwalb(img, scale=100, sigma=0.51, min_size=200)
-
+    
+    print fz_seg
     return fz_seg
 
 
@@ -56,18 +60,19 @@ def label_img(img_files):
 
     img = create_bin(img_files)
     labeled_img = label(input=img, connectivity=2, background=0)
+    labeled_img = remove_small_objects(labeled_img, min_size=300, connectivity=2)
 
     return labeled_img
 
 
-def display_images(img_files):
+def display_images(img):
 
-    original, ihc_images, i = color_conversion(img_files)
+    original, ihc_images= color_conversion(img)
     bin_images = create_bin(img_files)
     fz_seg = segment(img_files)
     labeled_img = label_img(img_files)
 
-    plt.figure(num=i)
+    plt.figure()
 
     plt.subplot(131)
     plt.imshow(ihc_images[:, :, 2], cmap=plt.cm.gray)
@@ -83,8 +88,7 @@ def display_images(img_files):
 
     #return plt.show()
 
-
-def data(img_files):
+def get_data(img):
 
     labels = label_img(img_files)
     props = regionprops(labels)
@@ -103,15 +107,15 @@ def data(img_files):
     return area, perimeter
 
 
-def write_csv():
+def write_csv(output_data, save_path):
 
     save_out = save_path + '/output_data.csv'
     with open(save_out, "wb") as f:
         writer = csv.writer(f)
-        writer.writerows(output_area)
+        writer.writerows(output_data)
 
 
-def save_images(path):
+def save_images(save_path):
 
     filename = save_path + '/' + str(i) + ".tiff"
     if not os.path.exists(os.path.dirname(filename)):
@@ -135,11 +139,11 @@ def main():
     img_files = glob.glob(img_set + '/*.tif')
     output_area = []
     output_perimeter = []
-
-    display_images(img_files)
-
+    
+    for im in img_files:
+        display_images(im)
+        
     plt.show()
-
 
 if __name__ == "__main__":
     main()
