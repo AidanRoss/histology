@@ -31,7 +31,7 @@ def color_conversion(img_files):
 def rescale(img):
 
     original_img, rescale_img = color_conversion(img)
-    rescale = rescale_intensity(rescale_img[:, :, 2], out_range=(0,1))
+    rescale = rescale_intensity(rescale_img[:, :, 2], out_range=(0, 1))
     int_img = img_as_uint(rescale)
 
     return int_img
@@ -62,12 +62,13 @@ def label_img(img_files):
     labeled_img = label(input=img, connectivity=2, background=0)
     labeled_img = remove_small_objects(labeled_img, min_size=300, connectivity=2)
 
+    print labeled_img
     return labeled_img
 
 
 def display_images(img):
 
-    original, ihc_images= color_conversion(img)
+    original, ihc_images = color_conversion(img)
     bin_images = create_bin(img_files)
     fz_seg = segment(img_files)
     labeled_img = label_img(img_files)
@@ -90,21 +91,30 @@ def display_images(img):
 
 def get_data(img):
 
-    labels = label_img(img_files)
+    labels = label_img(img)
     props = regionprops(labels)
 
     area = []
     perimeter = []
+    eccentricity = []
+    filled_area = []
 
     ns = len(np.unique(labels))
+    print ns, ' Is the Number of Labelled Regions'
 
     for seg in range(ns-1):
 
         area.append(props[seg].area)
-        perimeter.append(props[seg].area)
+        perimeter.append(props[seg].perimeter)
+        eccentricity.append(props[seg].eccentricity)
+        filled_area.append(props[seg].filled_area)
+        
+    avg_area = np.mean(area)
+    avg_perimeter = np.mean(perimeter)
+    avg_eccentricity = np.mean(eccentricity)
+    avg_filled_area = np.mean(filled_area)
 
-        return area, perimeter
-    return area, perimeter
+    return area, perimeter, eccentricity, filled_area, avg_area, avg_perimeter, avg_eccentricity, avg_filled_area
 
 
 def write_csv(output_data, save_path):
@@ -115,9 +125,9 @@ def write_csv(output_data, save_path):
         writer.writerows(output_data)
 
 
-def save_images(save_path):
+def save_image(save_path, img_name):
 
-    filename = save_path + '/' + str(i) + ".tiff"
+    filename = save_path + '/' + img_name + ".tiff"
     if not os.path.exists(os.path.dirname(filename)):
         try:
             os.makedirs(os.path.dirname(filename))
@@ -139,10 +149,38 @@ def main():
     img_files = glob.glob(img_set + '/*.tif')
     output_area = []
     output_perimeter = []
+    output_eccentricity = []
+    output_filled_area = []
+    out_avg_area = []
+    out_avg_perim = []
+    out_avg_eccen = []
+    out_avg_filled = []
     
     for im in img_files:
         display_images(im)
+        area, perimeter, eccentricity, filled_area, avg_area, avg_perim, avg_eccen, avg_filled = get_data(im)
         
+        output_area.append(area)
+        output_perimeter.append(perimeter)
+        output_eccentricity.append(eccentricity)
+        output_filled_area.append(filled_area)
+        out_avg_area.append(avg_area)
+        out_avg_perim.append(avg_perim)
+        out_avg_eccen.append(avg_eccen)
+        out_avg_filled.append(avg_filled)
+        
+    output_data = [output_area,
+                    output_perimeter,
+                    output_eccentricity,
+                    output_filled_area,
+                    out_avg_area
+                    out_avg_eccen,
+                    out_avg_filled]
+                    
+    print output_data
+    
+    write_csv(output_data, save_path='/Users/aidan/desktop/aidan_summer/Week_Tasks/Week_9/)
+    
     plt.show()
 
 if __name__ == "__main__":
