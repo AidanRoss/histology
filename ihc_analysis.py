@@ -21,7 +21,7 @@ from skimage.morphology import label, remove_small_objects, remove_small_holes
 from mahotas import otsu
 
 
-def color_conversion(img_files):
+def color_conversion(img):
 
     ihc_rgb = skimage.io.imread(im)
     ihc_hed = rgb2hed(ihc_rgb)
@@ -56,9 +56,9 @@ def segment(img):
     return fz_seg
 
 
-def label_img(img_files):
+def label_img(img):
 
-    img = create_bin(img_files)
+    img = create_bin(img)
     labeled_img = label(input=img, connectivity=2, background=0)
     labeled_img = remove_small_objects(labeled_img, min_size=300, connectivity=2)
 
@@ -125,8 +125,11 @@ def write_csv(output_data, save_path):
         writer.writerows(output_data)
 
 
-def save_image(save_path, img_name):
-
+def save_image(save_path, img):
+    
+    original_img, dab_img = color_conversion(img)
+    l_img = lbel_img(img)
+    img_file = mark_boundaries(origianl_img, label_img=l_img, color=(1, 0, 0))
     filename = save_path + '/' + img_name + ".tiff"
     if not os.path.exists(os.path.dirname(filename)):
         try:
@@ -136,7 +139,7 @@ def save_image(save_path, img_name):
                 raise
     with open(filename, "w") as f:
         f.write(filename)
-    plt.imsave(fname=save_path + '/' + str(i) + ".tiff", arr=mark_boundaries(ihc_rgb, fz_seg, color=(1, 0, 0)))
+    plt.imsave(fname=filename, arr=img_file)
 
 
 def main():
@@ -144,9 +147,10 @@ def main():
     # Test data of 3 images - will be much larger data set in the Future
     # hist = '/Users/aidan/Desktop/aidan_summer/Week_Tasks/Week_6/histology/tiff'
     hist = '/Users/aidan/Desktop/aidan_summer/Week_Tasks/Week_9/tma_test'
-    path = 'User/aidan/desktop/aidan_summer/Week_Tasks/Week_7'
+    path = 'User/aidan/desktop/aidan_summer/Week_Tasks/Week_9/save_images'
     img_set = hist
     img_files = glob.glob(img_set + '/*.tif')
+    
     output_area = []
     output_perimeter = []
     output_eccentricity = []
@@ -158,6 +162,7 @@ def main():
     
     for im in img_files:
         display_images(im)
+        # save_image(save_path=path, img=im)
         area, perimeter, eccentricity, filled_area, avg_area, avg_perim, avg_eccen, avg_filled = get_data(im)
         
         output_area.append(area)
@@ -173,7 +178,7 @@ def main():
                     output_perimeter,
                     output_eccentricity,
                     output_filled_area,
-                    out_avg_area
+                    out_avg_area,
                     out_avg_eccen,
                     out_avg_filled]
                     
