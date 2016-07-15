@@ -23,7 +23,7 @@ from mahotas import otsu
 
 def color_conversion(img):
 
-    ihc_rgb = skimage.io.imread(im)
+    ihc_rgb = skimage.io.imread(img)
     ihc_hed = rgb2hed(ihc_rgb)
     
     return ihc_rgb, ihc_hed
@@ -69,9 +69,9 @@ def label_img(img):
 def display_images(img):
 
     original, ihc_images = color_conversion(img)
-    bin_images = create_bin(img_files)
-    fz_seg = segment(img_files)
-    labeled_img = label_img(img_files)
+    bin_images = create_bin(img)
+    fz_seg = segment(img)
+    labeled_img = label_img(img)
 
     plt.figure()
 
@@ -128,9 +128,9 @@ def write_csv(output_data, save_path):
 def save_image(save_path, img):
     
     original_img, dab_img = color_conversion(img)
-    l_img = lbel_img(img)
-    img_file = mark_boundaries(origianl_img, label_img=l_img, color=(1, 0, 0))
-    filename = save_path + '/' + img_name + ".tiff"
+    l_img = label_img(img)
+    img_file = mark_boundaries(original_img, label_img=l_img, color=(1, 0, 0))
+    filename = save_path + '/' + img + ".tiff"
     if not os.path.exists(os.path.dirname(filename)):
         try:
             os.makedirs(os.path.dirname(filename))
@@ -184,7 +184,7 @@ def main():
                     
     print output_data
     
-    write_csv(output_data, save_path='/Users/aidan/desktop/aidan_summer/Week_Tasks/Week_9/)
+    write_csv(output_data, save_path='/Users/aidan/desktop/aidan_summer/Week_Tasks/Week_9/')
     
     plt.show()
 
