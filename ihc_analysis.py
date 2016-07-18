@@ -19,6 +19,8 @@ from skimage.segmentation import felzenszwalb, mark_boundaries
 from skimage.measure import regionprops
 from skimage.morphology import label, remove_small_objects, remove_small_holes
 from mahotas import otsu
+from operator import truediv
+from math import pi
 
 
 def color_conversion(img):
@@ -98,23 +100,33 @@ def get_data(img):
     perimeter = []
     eccentricity = []
     filled_area = []
+    maj_axis = []
+    min_axis = []
 
-    ns = len(np.unique(labels))
+    ns = len(np.unique(labels)) - 1
     print ns, ' Is the Number of Labelled Regions'
 
-    for seg in range(ns-1):
+    for seg in range(ns):
 
         area.append(props[seg].area)
         perimeter.append(props[seg].perimeter)
         eccentricity.append(props[seg].eccentricity)
         filled_area.append(props[seg].filled_area)
+        min_axis.append(props[seg].minor_axis_length)
+        maj_axis.append(props[seg].major_axis_length)
         
     avg_area = np.mean(area)
     avg_perimeter = np.mean(perimeter)
     avg_eccentricity = np.mean(eccentricity)
     avg_filled_area = np.mean(filled_area)
+    roundness = map(truediv, min_axis, maj_axis)
+    new_list = [4 * pi * a for a in area]
+    circularity = map(truediv, new_list, (np.square(perimeter)))
+    avg_roundness = np.mean(circularity)
+    avg_circularity = np.mean(circularity)
 
-    return area, perimeter, eccentricity, filled_area, avg_area, avg_perimeter, avg_eccentricity, avg_filled_area
+    return area, perimeter, eccentricity, filled_area, avg_area, avg_perimeter, avg_eccentricity, avg_filled_area,\
+        roundness, circularity, avg_roundness, avg_circularity
 
 
 def write_csv(output_data, save_path):
@@ -155,32 +167,45 @@ def main():
     output_perimeter = []
     output_eccentricity = []
     output_filled_area = []
+    output_roundness = []
+    output_circularity = []
     out_avg_area = []
     out_avg_perim = []
     out_avg_eccen = []
     out_avg_filled = []
+    out_avg_roundness = []
+    out_avg_circularity = []
     
     for im in img_files:
         display_images(im)
         # save_image(save_path=path, img=im)
-        area, perimeter, eccentricity, filled_area, avg_area, avg_perim, avg_eccen, avg_filled = get_data(im)
+        area, perimeter, eccentricity, filled_area, avg_area, avg_perim, avg_eccen, avg_filled,\
+        roundness, circularity, avg_roundness, avg_circularity = get_data(im)
         
         output_area.append(area)
         output_perimeter.append(perimeter)
         output_eccentricity.append(eccentricity)
         output_filled_area.append(filled_area)
+        output_roundness.append(roundness)
+        output_circularity.append(circularity)
         out_avg_area.append(avg_area)
         out_avg_perim.append(avg_perim)
         out_avg_eccen.append(avg_eccen)
         out_avg_filled.append(avg_filled)
+        out_avg_roundness.append(avg_roundness)
+        out_avg_circularity.append(circularity)
         
     output_data = [output_area,
                     output_perimeter,
                     output_eccentricity,
                     output_filled_area,
+                    output_roundness,
+                    output_circularity,
                     out_avg_area,
                     out_avg_eccen,
-                    out_avg_filled]
+                    out_avg_filled
+                    out_avg_roundness,
+                    out_avg_circularity]
                     
     print output_data
     
