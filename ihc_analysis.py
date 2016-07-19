@@ -159,10 +159,11 @@ def main():
     # Test data of 3 images - will be much larger data set in the Future
     # hist = '/Users/aidan/Desktop/aidan_summer/Week_Tasks/Week_6/histology/tiff'
     hist = '/Users/aidan/Desktop/aidan_summer/Week_Tasks/Week_9/tma_test'
-    path = 'User/aidan/desktop/aidan_summer/Week_Tasks/Week_9/save_images'
+    path = 'User/aidan/desktop/aidan_summer/Week_Tasks/Week_9/save_images/'
     img_set = hist
     img_files = glob.glob(img_set + '/*.tif')
     
+    output_nest = []
     output_area = []
     output_perimeter = []
     output_eccentricity = []
@@ -179,9 +180,10 @@ def main():
     for i, im in enumerate(img_files):
         display_images(im)
         save_image(save_path=path, img=im)
-        area, perimeter, eccentricity, filled_area, avg_area, avg_perim, avg_eccen, avg_filled,\
+        nest, area, perimeter, eccentricity, filled_area, avg_area, avg_perim, avg_eccen, avg_filled,\
         roundness, circularity, avg_roundness, avg_circularity = get_data(im)
         
+        output_nest.append(nest)
         output_area.append(area)
         output_perimeter.append(perimeter)
         output_eccentricity.append(eccentricity)
@@ -195,7 +197,8 @@ def main():
         out_avg_roundness.append(avg_roundness)
         out_avg_circularity.append(circularity)
         
-    output_data = [output_area,
+    output_data = [output_nest,
+                    output_area,
                     output_perimeter,
                     output_eccentricity,
                     output_filled_area,
@@ -203,13 +206,13 @@ def main():
                     output_circularity,
                     out_avg_area,
                     out_avg_eccen,
-                    out_avg_filled
+                    out_avg_filled,
                     out_avg_roundness,
                     out_avg_circularity]
                     
     print output_data
     
-    write_csv(output_data, save_path='/Users/aidan/desktop/aidan_summer/Week_Tasks/Week_9/')
+    write_csv(output_data, save_path='/Users/aidan/desktop/aidan_summer/Week_Tasks/Week_9')
     
     plt.show()
 
