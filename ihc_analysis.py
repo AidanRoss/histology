@@ -137,12 +137,12 @@ def write_csv(output_data, save_path):
         writer.writerows(output_data)
 
 
-def save_image(save_path, img):
+def save_image(save_path, img, num):
     
     original_img, dab_img = color_conversion(img)
     l_img = label_img(img)
     img_file = mark_boundaries(original_img, label_img=l_img, color=(1, 0, 0))
-    filename = save_path + '/' + img + ".tiff"
+    filename = save_path + 'IHC_Figure%d' % num + ".tiff"
     if not os.path.exists(os.path.dirname(filename)):
         try:
             os.makedirs(os.path.dirname(filename))
@@ -176,9 +176,9 @@ def main():
     out_avg_roundness = []
     out_avg_circularity = []
     
-    for im in img_files:
+    for i, im in enumerate(img_files):
         display_images(im)
-        # save_image(save_path=path, img=im)
+        save_image(save_path=path, img=im)
         area, perimeter, eccentricity, filled_area, avg_area, avg_perim, avg_eccen, avg_filled,\
         roundness, circularity, avg_roundness, avg_circularity = get_data(im)
         
