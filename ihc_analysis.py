@@ -6,6 +6,7 @@ import csv
 import os
 import errno
 
+
 import glob
 import numpy as np
 import matplotlib.pyplot as plt
@@ -18,6 +19,7 @@ from skimage.util import img_as_float, img_as_uint
 from skimage.segmentation import felzenszwalb, mark_boundaries
 from skimage.measure import regionprops
 from skimage.morphology import label, remove_small_objects, remove_small_holes
+from skimage.io import imsave
 from mahotas import otsu
 from operator import truediv
 from math import pi
@@ -27,8 +29,9 @@ def color_conversion(img):
 
     ihc_rgb = skimage.io.imread(img)
     ihc_hed = rgb2hed(ihc_rgb)
-    
+
     return ihc_rgb, ihc_hed
+
 
 def rescale(img):
 
@@ -43,8 +46,8 @@ def create_bin(img):
 
     int_img = rescale(img)
     t_otsu = otsu(int_img)
-    bin = (int_img >= t_otsu)
-    float_img = img_as_float(bin)
+    bin_img = (int_img >= t_otsu)
+    float_img = img_as_float(bin_img)
 
     return float_img
 
@@ -53,8 +56,8 @@ def segment(img):
 
     img = create_bin(img)
     fz_seg = felzenszwalb(img, scale=100, sigma=0.51, min_size=200)
-    
-    print fz_seg
+
+    # print fz_seg
     return fz_seg
 
 
@@ -62,19 +65,19 @@ def label_img(img):
 
     img = create_bin(img)
     labeled_img = label(input=img, connectivity=2, background=0)
-    labeled_img = remove_small_objects(labeled_img, min_size=300, connectivity=2)
+    labeled_img = remove_small_objects(labeled_img, min_size=70, connectivity=2)
 
     print labeled_img
     return labeled_img
 
 
-def display_images(img):
+def display_image(img):
 
     original, ihc_images = color_conversion(img)
     bin_images = create_bin(img)
     fz_seg = segment(img)
     labeled_img = label_img(img)
-
+    n = len(np.unique(labeled_img)) - 1
     plt.figure()
 
     plt.subplot(131)
@@ -83,13 +86,15 @@ def display_images(img):
 
     plt.subplot(132)
     plt.imshow(labeled_img, cmap=plt.cm.spectral)
-    plt.title("Labeled Image")
+    plt.title("Labeled Image %d" % n)
 
     plt.subplot(133)
     plt.imshow(mark_boundaries(original, label_img=labeled_img, color=(1, 0, 0)))
     plt.title('Overlay Outlines')
 
+
     #return plt.show()
+
 
 def get_data(img):
 
@@ -103,8 +108,9 @@ def get_data(img):
     maj_axis = []
     min_axis = []
 
+
     ns = len(np.unique(labels)) - 1
-    print ns, ' Is the Number of Labelled Regions'
+    print ns, 'Number of Nests'
 
     for seg in range(ns):
 
@@ -114,7 +120,7 @@ def get_data(img):
         filled_area.append(props[seg].filled_area)
         min_axis.append(props[seg].minor_axis_length)
         maj_axis.append(props[seg].major_axis_length)
-        
+
     avg_area = np.mean(area)
     avg_perimeter = np.mean(perimeter)
     avg_eccentricity = np.mean(eccentricity)
@@ -122,27 +128,39 @@ def get_data(img):
     roundness = map(truediv, min_axis, maj_axis)
     new_list = [4 * pi * a for a in area]
     circularity = map(truediv, new_list, (np.square(perimeter)))
-    avg_roundness = np.mean(circularity)
+    avg_roundness = np.mean(roundness)
     avg_circularity = np.mean(circularity)
 
-    return area, perimeter, eccentricity, filled_area, avg_area, avg_perimeter, avg_eccentricity, avg_filled_area,\
-        roundness, circularity, avg_roundness, avg_circularity
+    total_nest_area = sum(area)
+    total_nest_perim = sum(perimeter)
+    std_dev_area = np.std(area)
+    std_dev_perimeter = np.std(perimeter)
+    std_dev_eccentricity = np.std(eccentricity)
+    std_dev_filled_area = np.std(filled_area)
+    std_dev_roundness = np.std(roundness)
+    std_dev_circularity = np.std(circularity)
+
+    return ns, area, perimeter, eccentricity, filled_area, avg_area, avg_perimeter, avg_eccentricity, avg_filled_area,\
+        roundness, circularity, avg_roundness, avg_circularity, total_nest_area, total_nest_perim,\
+        std_dev_area, std_dev_perimeter, std_dev_eccentricity, std_dev_filled_area, std_dev_roundness,\
+        std_dev_circularity
 
 
 def write_csv(output_data, save_path):
 
     save_out = save_path + '/output_data.csv'
+
     with open(save_out, "wb") as f:
         writer = csv.writer(f)
         writer.writerows(output_data)
 
 
 def save_image(save_path, img, num):
-    
+
     original_img, dab_img = color_conversion(img)
     l_img = label_img(img)
     img_file = mark_boundaries(original_img, label_img=l_img, color=(1, 0, 0))
-    filename = save_path + 'IHC_Figure%d' % num + ".tiff"
+    filename = save_path + 'IHC_Figure%d' % num + ".png"  # '%s' % img
     if not os.path.exists(os.path.dirname(filename)):
         try:
             os.makedirs(os.path.dirname(filename))
@@ -157,12 +175,15 @@ def save_image(save_path, img, num):
 def main():
 
     # Test data of 3 images - will be much larger data set in the Future
+    png_hist = '/Users/aidan/Desktop/aidan_summer/Week_Tasks/Week_9/tma-extracted/tma_extracted_png'
     # hist = '/Users/aidan/Desktop/aidan_summer/Week_Tasks/Week_6/histology/tiff'
-    hist = '/Users/aidan/Desktop/aidan_summer/Week_Tasks/Week_9/tma_test'
-    path = 'User/aidan/desktop/aidan_summer/Week_Tasks/Week_9/save_images/'
-    img_set = hist
-    img_files = glob.glob(img_set + '/*.tif')
-    
+    # hist = '/Users/aidan/Desktop/aidan_summer/Week_Tasks/Week_9/tma_test'
+    # hist = '/Users/aidan/Desktop/aidan_summer/Week_Tasks/Week_10/tma_extracted_tiff'
+    test_hist = '/Users/aidan/Desktop/aidan_summer/Week_Tasks/Week_9/test'
+    path = '/Users/aidan/Desktop/aidan_summer/Week_Tasks/Week_9/save_images/'
+    img_set = png_hist
+    img_files = glob.glob(img_set + '/*.png')
+
     output_nest = []
     output_area = []
     output_perimeter = []
@@ -170,19 +191,30 @@ def main():
     output_filled_area = []
     output_roundness = []
     output_circularity = []
+
     out_avg_area = []
     out_avg_perim = []
     out_avg_eccen = []
     out_avg_filled = []
     out_avg_roundness = []
     out_avg_circularity = []
-    
+
+    out_tot_area = []
+    out_tot_perim = []
+    std_dev_area = []
+    std_dev_perimeter = []
+    std_dev_eccentricity = []
+    std_dev_filled_area = []
+    std_dev_roundness = []
+    std_dev_circularity = []
+
     for i, im in enumerate(img_files):
-        display_images(im)
-        save_image(save_path=path, img=im)
-        nest, area, perimeter, eccentricity, filled_area, avg_area, avg_perim, avg_eccen, avg_filled,\
-        roundness, circularity, avg_roundness, avg_circularity = get_data(im)
-        
+        display_image(im)
+        save_image(save_path=path, img=im, num=i)
+        nest, area, perimeter, eccentricity, filled_area, avg_area, avg_perim, avg_eccen, avg_filled, roundness,\
+        circularity, avg_roundness, avg_circularity,tot_area, tot_perim, std_area, std_perimeter, std_eccentricity,\
+        std_filled_area, std_roundness, std_circularity = get_data(im)
+
         output_nest.append(nest)
         output_area.append(area)
         output_perimeter.append(perimeter)
@@ -195,27 +227,45 @@ def main():
         out_avg_eccen.append(avg_eccen)
         out_avg_filled.append(avg_filled)
         out_avg_roundness.append(avg_roundness)
-        out_avg_circularity.append(circularity)
-        
+        out_avg_circularity.append(avg_circularity)
+
+        out_tot_area.append(tot_area)
+        out_tot_perim.append(tot_perim)
+
+        std_dev_area.append(std_area)
+        std_dev_perimeter.append(std_perimeter)
+        std_dev_eccentricity.append(std_eccentricity)
+        std_dev_filled_area.append(std_filled_area)
+        std_dev_roundness.append(std_roundness)
+        std_dev_circularity.append(std_circularity)
+
     output_data = [output_nest,
-                    output_area,
-                    output_perimeter,
-                    output_eccentricity,
-                    output_filled_area,
-                    output_roundness,
-                    output_circularity,
-                    out_avg_area,
-                    out_avg_eccen,
-                    out_avg_filled,
-                    out_avg_roundness,
-                    out_avg_circularity]
-                    
+                   output_area,
+                   std_dev_area,
+                   out_tot_area,
+                   out_avg_area,
+                   output_perimeter,
+                   std_dev_perimeter,
+                   out_tot_perim,
+                   out_avg_perim,
+                   output_circularity,
+                   std_dev_circularity,
+                   out_avg_circularity,
+                   output_roundness,
+                   std_dev_roundness,
+                   out_avg_roundness,
+                   output_eccentricity,
+                   std_dev_eccentricity,
+                   out_avg_eccen,
+                   output_filled_area,
+                   std_dev_filled_area,
+                   out_avg_filled]
+
     print output_data
-    
-    write_csv(output_data, save_path='/Users/aidan/desktop/aidan_summer/Week_Tasks/Week_9')
-    
+
+    write_csv(output_data, save_path='/Users/aidan/Desktop/aidan_summer/Week_Tasks/Week_9')
+
     plt.show()
 
 if __name__ == "__main__":
     main()
-
