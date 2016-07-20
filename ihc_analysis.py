@@ -14,7 +14,7 @@ import skimage.io
 
 # Import useful image analysis modules
 from skimage.exposure import rescale_intensity
-from skimage.color import rgb2hed
+from skimage.color import rgb2hed, rgb2grey
 from skimage.util import img_as_float, img_as_uint
 from skimage.segmentation import felzenszwalb, mark_boundaries
 from skimage.measure import regionprops
@@ -155,13 +155,14 @@ def write_csv(output_data, save_path):
         writer.writerows(output_data)
 
 
-def save_image(save_path, img):
+def save_image(save_path, img, overlay=True, binary=False, DAB=False,  ):
 
-    original_img, dab_img = color_conversion(img)
+    original_img, ihc_img = color_conversion(img)
     l_img = label_img(img)
     orig = os.path.basename(os.path.normpath(img))
     img_file = mark_boundaries(original_img, label_img=l_img, color=(1, 0, 0))
-    filename = save_path + 'labelled' + orig  # '%s' % img
+    # img_file = l_img
+    filename = save_path + 'Segments' + orig  # 'Labelled_%s' % + ".png"  # '%s' % img
     if not os.path.exists(os.path.dirname(filename)):
         try:
             os.makedirs(os.path.dirname(filename))
