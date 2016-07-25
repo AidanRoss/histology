@@ -14,12 +14,11 @@ import skimage.io
 
 # Import useful image analysis modules
 from skimage.exposure import rescale_intensity
-from skimage.color import rgb2hed, rgb2grey
+from skimage.color import rgb2hed
 from skimage.util import img_as_float, img_as_uint
 from skimage.segmentation import felzenszwalb, mark_boundaries
 from skimage.measure import regionprops
 from skimage.morphology import label, remove_small_objects, remove_small_holes
-from skimage.io import imsave
 from mahotas import otsu
 from operator import truediv
 from math import pi
@@ -65,10 +64,12 @@ def label_img(img):
 
     img = create_bin(img)
     labeled_img = label(input=img, connectivity=2, background=0)
-    labeled_img = remove_small_objects(labeled_img, min_size=70, connectivity=2)
+    rem_holes = remove_small_holes(labeled_img, min_size=100, connectivity=2)
+    labeled_img1 = remove_small_objects(rem_holes, min_size=70, connectivity=2)
+    labeled = label(labeled_img1, connectivity=2, backround=0)
 
-    print labeled_img
-    return labeled_img
+    print labeled
+    return labeled
 
 
 def display_image(img):
