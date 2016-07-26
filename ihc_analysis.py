@@ -52,12 +52,27 @@ def create_bin(img):
 
 
 def segment(img):
-
-    img = create_bin(img)
-    fz_seg = felzenszwalb(img, scale=100, sigma=0.51, min_size=200)
-
+    
+    im = skimage.io.imread(img)
+    gray = rgb2grey(im)
+    smooth = gaussian(gray, sigma=10)
+    thresh = 0.88
+    binar = (smooth <= thresh)
+    bin = remove_small_holes(binar, min_size=90000, connectivity=2)
+    bin1 = remove_small_objects(bin, min_size=20000, connectivity=2)
+    dist = ndi.distance_transform_edt(bin1)
+    local_maxi = peak_local_max(dist, indices=False, labels=bin1)
+    markers = ndi.label(local_maxi)[0]
+    wat = watershed(dist, markers, mask=bin1)
+    
+    size = np.bincount(wat.ravel())
+    biggest_label = size[1:].argmax() + 1
+    clump_mask = wat == biggest_label
+    
+    # fz_seg = felzenszwalb(fil, scale=1, sigma=5, min_size=20000)
     # print fz_seg
-    return fz_seg
+    
+    return clump_mask
 
 
 def label_img(img):
