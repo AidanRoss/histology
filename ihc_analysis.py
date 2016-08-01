@@ -21,7 +21,7 @@ from skimage.segmentation import felzenszwalb, mark_boundaries
 from skimage.measure import regionprops
 from skimage.morphology import label, remove_small_objects, remove_small_holes, watershed
 from skimage.restoration import denoise_nl_means
-from skimage.filters import gaussian
+from skimage.filters import gaussian, threshold_otsu
 from skimage.feature import peak_local_max
 
 from scipy import ndimage as ndi
@@ -47,21 +47,22 @@ def rescale(img):
     return int_img
 
 
-def create_bin(img, otsu_method=True):
+def create_bin(img): # , otsu_method=True):
     # Binary image created from Threshold, then labelling is done on this image
-    if otsu_method:
-        int_img = rescale(img)
-        t_otsu = otsu(int_img)
-        bin_img = (int_img >= t_otsu)
-        float_img = img_as_float(bin_img)
+    # if otsu_method:
+    int_img = rescale(img)
+    t_otsu = threshold_otsu(int_img)
+    bin_img = (int_img >= t_otsu)
+    float_img = img_as_float(bin_img)
 
-        return float_img
-    else:
-        thresh = 400
-        int_img = rescale(img)
-        bin_img = (int_img >= thresh)
-        float_img = img_as_float(bin_img)
-        return float_img
+    return float_img
+    
+    #else:
+    #    thresh = 400
+    #    int_img = rescale(img)
+    #    bin_img = (int_img >= thresh)
+    #    float_img = img_as_float(bin_img)
+    #    return float_img
 
 
 def segment(img):
