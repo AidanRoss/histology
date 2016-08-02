@@ -11,27 +11,31 @@ import glob
 import numpy as np
 import matplotlib.pyplot as plt
 import skimage.io
+from skimage import io
 import scipy
 
 # Import useful image analysis modules
 from skimage.exposure import rescale_intensity
-from skimage.color import rgb2hed, rgb2grey
+from skimage.color import rgb2hed, rgb2grey, gray2rgb
 from skimage.util import img_as_float, img_as_uint
 from skimage.segmentation import felzenszwalb, mark_boundaries
-from skimage.measure import regionprops
+from skimage.measure import regionprops, ransac, CircleModel
 from skimage.morphology import label, remove_small_objects, remove_small_holes, watershed
 from skimage.restoration import denoise_nl_means
 from skimage.filters import gaussian, threshold_otsu
-from skimage.feature import peak_local_max
+from skimage.feature import peak_local_max, canny
+from skimage.draw import circle_perimeter
 
 from scipy import ndimage as ndi
-from mahotas import otsu
+
 from operator import truediv
 from math import pi
 
 
+
 def color_conversion(img):
     # This function converts rgb image to the IHC color space, where channel 1 is Hematoxylin, 2 in Eosin and 3 is DAB
+
     ihc_rgb = skimage.io.imread(img)
     ihc_hed = rgb2hed(ihc_rgb)
 
@@ -40,24 +44,29 @@ def color_conversion(img):
 
 def rescale(img):
     # Rescaling the Image to a unsigned integer for Otsu thresholding method
-    original_img, rescale_img = color_conversion(img)
-    rescaled = rescale_intensity(rescale_img[:, :, 2], out_range=(0, 1))
+    original_img, mask, eos, rr, cc  = segment(img)
+    rescaled = rescale_intensity(mask, out_range=(0, 1))
+    rescale_masked = rescale_intensity(eos, out_range=(0, 1))
+
     int_img = img_as_uint(rescaled)
+    int_mask = img_as_uint(rescale_masked)
 
-    return int_img
+    return int_img, int_mask
 
 
-def create_bin(img): # , otsu_method=True):
+def create_bin(img):  # otsu_method=True):
     # Binary image created from Threshold, then labelling is done on this image
     # if otsu_method:
-    int_img = rescale(img)
+    int_img, masked_int = rescale(img)
     t_otsu = threshold_otsu(int_img)
     bin_img = (int_img >= t_otsu)
+    bin_masked = (masked_int >= t_otsu)
     float_img = img_as_float(bin_img)
+    float_masked = img_as_float(bin_masked)
 
-    return float_img
-    
-    #else:
+    return float_img, float_masked
+
+    # else:
     #    thresh = 400
     #    int_img = rescale(img)
     #    bin_img = (int_img >= thresh)
@@ -67,37 +76,45 @@ def create_bin(img): # , otsu_method=True):
 
 def segment(img):
     # Identifiying the Tissue punches in order to Crop the image correctly
-    im = skimage.io.imread(img)
+    im, IHC = color_conversion(img)
     gray = rgb2grey(im)
-    smooth = gaussian(gray, sigma=10)
+    smooth = gaussian(gray, sigma=3)
     thresh = 0.88
     binar = (smooth <= thresh)
-    bin = remove_small_holes(binar, min_size=90000, connectivity=2)
-    bin1 = remove_small_objects(bin, min_size=20000, connectivity=2)
-    dist = ndi.distance_transform_edt(bin1)
-    local_maxi = peak_local_max(dist, indices=False, labels=bin1)
-    markers = ndi.label(local_maxi)[0]
-    wat = watershed(dist, markers, mask=bin1)
+    bin = remove_small_holes(binar, min_size=200000, connectivity=2)
+    bin1 = remove_small_objects(bin, min_size=40000, connectivity=2)
+    bin2 = gaussian(bin1, sigma=3)
 
-    size = np.bincount(wat.ravel())
-    biggest_label = size[1:].argmax() + 1
-    clump_mask = wat == biggest_label
+    eosin = IHC[:, :, 2]
+    edges = canny(bin2)
+    coords = np.column_stack(np.nonzero(edges))
 
+    model, inliers = ransac(coords, CircleModel, min_samples=3, residual_threshold=1, max_trials=1000)
 
+    rr, cc = circle_perimeter(int(model.params[0]),
+                              int(model.params[1]),
+                              int(model.params[2]),
+                              shape=im.shape)
+    a, b = model.params[0], model.params[1]
+    r = model.params[2]
+    ny, nx = eosin.shape
+    ix, iy = np.meshgrid(np.arange(nx), np.arange(ny))
+    distance = np.sqrt((ix - b)**2 + (iy - a)**2)
 
-    # fz_seg = felzenszwalb(fil, scale=1, sigma=5, min_size=20000)
+    mask = np.ma.masked_where(distance > r, eosin)
 
-    # print fz_seg
-    return clump_mask
+    return im, mask, eosin, rr, cc
 
 
 def label_img(img):
     # Labelling the nests is done using connected components
-    img = create_bin(img)
+    img, masked_img = create_bin(img)
+    min_nest_size = 100  # Size in Pixels of minimum nest
+    min_hole_size = 500  # Size in Pixels of minimum hole
 
-    labeled_img = label(input=img, connectivity=2, background=0)
-    rem_holes = remove_small_holes(labeled_img, min_size=100, connectivity=2)
-    labeled_img1 = remove_small_objects(rem_holes, min_size=70, connectivity=2)
+    labeled_img = label(input=masked_img, connectivity=2, background=0)
+    rem_holes = remove_small_holes(labeled_img, min_size=min_hole_size, connectivity=2)
+    labeled_img1 = remove_small_objects(rem_holes, min_size=min_nest_size, connectivity=2)
     labeled = label(labeled_img1, connectivity=2, background=0)
 
     print labeled
@@ -107,8 +124,8 @@ def label_img(img):
 def display_image(img):
     # Displaying images if needed
     original, ihc_images = color_conversion(img)
-    bin_images = create_bin(img)
-    clump = segment(img)
+    #bin_images, bin_masked = create_bin(img)
+    im, mask, eos, rr, cc = segment(img)
     labeled_img = label_img(img)
     n = len(np.unique(labeled_img)) - 1
 
@@ -126,7 +143,7 @@ def display_image(img):
     plt.title('Overlay Outlines')
 
     plt.subplot(144)
-    plt.imshow(mark_boundaries(original, clump, color=(0, 1, 0)))
+    plt.imshow(mask, cmap='gray')
     plt.title('Full Punch Segmentation')
 
 
@@ -144,7 +161,6 @@ def get_data(img):
     filled_area = []
     maj_axis = []
     min_axis = []
-
 
     ns = len(np.unique(labels)) - 1
     print ns, 'Number of Nests'
@@ -176,11 +192,12 @@ def get_data(img):
     std_dev_filled_area = np.std(filled_area)
     std_dev_roundness = np.std(roundness)
     std_dev_circularity = np.std(circularity)
+    name = os.path.basename(os.path.normpath(img))
 
     return ns, area, perimeter, eccentricity, filled_area, avg_area, avg_perimeter, avg_eccentricity, avg_filled_area,\
         roundness, circularity, avg_roundness, avg_circularity, total_nest_area, total_nest_perim,\
         std_dev_area, std_dev_perimeter, std_dev_eccentricity, std_dev_filled_area, std_dev_roundness,\
-        std_dev_circularity
+        std_dev_circularity, name
 
 
 def write_csv(output_data, save_path):
@@ -224,6 +241,7 @@ def main():
     img_set = test_hist
     img_files = glob.glob(img_set + '/*.png')
 
+    output_name = []
     output_nest = []
     output_area = []
     output_perimeter = []
@@ -250,11 +268,12 @@ def main():
 
     for im in img_files:
         display_image(im)
-        save_image(save_path=path, img=im)
+        # save_image(save_path=path, img=im)
         nest, area, perimeter, eccentricity, filled_area, avg_area, avg_perim, avg_eccen, avg_filled, roundness,\
         circularity, avg_roundness, avg_circularity, tot_area, tot_perim, std_area, std_perimeter, std_eccentricity,\
-        std_filled_area, std_roundness, std_circularity = get_data(im)
+        std_filled_area, std_roundness, std_circularity, name = get_data(im)
 
+        output_name.append(name)
         output_nest.append(nest)
         output_area.append(area)
         output_perimeter.append(perimeter)
@@ -279,7 +298,8 @@ def main():
         std_dev_roundness.append(std_roundness)
         std_dev_circularity.append(std_circularity)
 
-    output_data = [output_nest,
+    output_data = [output_name,
+                   output_nest,
                    output_area,
                    std_dev_area,
                    out_tot_area,
@@ -303,7 +323,7 @@ def main():
 
     print output_data
 
-    write_csv(output_data, save_path='/Users/aidan/Desktop/aidan_summer/Week_Tasks/Week_9')
+    #write_csv(output_data, save_path='/Users/aidan/Desktop/aidan_summer/Week_Tasks/Week_9')
 
     plt.show()
 
