@@ -16,12 +16,11 @@ import scipy
 
 # Import useful image analysis modules
 from skimage.exposure import rescale_intensity
-from skimage.color import rgb2hed, rgb2grey, gray2rgb
+from skimage.color import rgb2hed, rgb2grey
 from skimage.util import img_as_float, img_as_uint
 from skimage.segmentation import felzenszwalb, mark_boundaries
 from skimage.measure import regionprops, ransac, CircleModel
-from skimage.morphology import label, remove_small_objects, remove_small_holes, watershed
-from skimage.restoration import denoise_nl_means
+from skimage.morphology import label, remove_small_objects, remove_small_holes
 from skimage.filters import gaussian, threshold_otsu
 from skimage.feature import peak_local_max, canny
 from skimage.draw import circle_perimeter
@@ -30,7 +29,6 @@ from scipy import ndimage as ndi
 
 from operator import truediv
 from math import pi
-
 
 
 def color_conversion(img):
@@ -43,13 +41,13 @@ def color_conversion(img):
 
 
 def rescale(img):
-    # Rescaling the Image to a unsigned integer for Otsu thresholding method
-    original_img, mask, eos, rr, cc  = segment(img)
-    rescaled = rescale_intensity(mask, out_range=(0, 1))
-    rescale_masked = rescale_intensity(eos, out_range=(0, 1))
+    # Rescaling the Image to a unsigned integer for Otsu thresholding method 
+    original_img, mask, eos, rr, cc = segment(img)
+    rescaled_mask = rescale_intensity(mask, out_range=(0, 1))
+    rescale = rescale_intensity(eos, out_range=(0, 1))
 
-    int_img = img_as_uint(rescaled)
-    int_mask = img_as_uint(rescale_masked)
+    int_img = img_as_uint(rescale)
+    int_mask = img_as_uint(rescaled_mask)
 
     return int_img, int_mask
 
@@ -66,16 +64,12 @@ def create_bin(img):  # otsu_method=True):
 
     return float_img, float_masked
 
-    # else:
-    #    thresh = 400
-    #    int_img = rescale(img)
-    #    bin_img = (int_img >= thresh)
-    #    float_img = img_as_float(bin_img)
-    #    return float_img
-
 
 def segment(img):
     # Identifiying the Tissue punches in order to Crop the image correctly
+    # Canny edges and RANSAC is used to fit a circe to the punch
+    # A Mask is created
+
     im, IHC = color_conversion(img)
     gray = rgb2grey(im)
     smooth = gaussian(gray, sigma=3)
@@ -124,14 +118,15 @@ def label_img(img):
 def display_image(img):
     # Displaying images if needed
     original, ihc_images = color_conversion(img)
-    #bin_images, bin_masked = create_bin(img)
+    bin_images, bin_masked = create_bin(img)
+    im, in_mask = rescale(img)
     im, mask, eos, rr, cc = segment(img)
     labeled_img = label_img(img)
     n = len(np.unique(labeled_img)) - 1
 
     plt.figure()
     plt.subplot(141)
-    plt.imshow(ihc_images[:, :, 2], cmap=plt.cm.gray)
+    plt.imshow(in_mask, cmap='gray')
     plt.title("DAB color space")
 
     plt.subplot(142)
@@ -231,14 +226,11 @@ def save_image(save_path, img):  # overlay=True, binary=False, DAB=False):
 def main():
     # Main function that executes the functions desired above
 
-    # Test data of 3 images - will be much larger data set in the Future
+
     png_hist = '/Users/aidan/Desktop/aidan_summer/Week_Tasks/Week_9/tma-extracted/tma_extracted_png'
-    # hist = '/Users/aidan/Desktop/aidan_summer/Week_Tasks/Week_6/histology/tiff'
-    # hist = '/Users/aidan/Desktop/aidan_summer/Week_Tasks/Week_9/tma_test'
-    # hist = '/Users/aidan/Desktop/aidan_summer/Week_Tasks/Week_10/tma_extracted_tiff'
     test_hist = '/Users/aidan/Desktop/aidan_summer/Week_Tasks/Week_9/test'  # Path with image files (png)
-    path = '/Users/aidan/Desktop/aidan_summer/Week_Tasks/Week_9/save_images/'
-    img_set = test_hist
+    path = '/Users/aidan/Desktop/aidan_summer/Week_Tasks/Week_9/save_images/' # Path to save CSV file
+    img_set = test_hist # Image set that is to be analyzed
     img_files = glob.glob(img_set + '/*.png')
 
     output_name = []
@@ -323,7 +315,7 @@ def main():
 
     print output_data
 
-    #write_csv(output_data, save_path='/Users/aidan/Desktop/aidan_summer/Week_Tasks/Week_9')
+    write_csv(output_data, save_path='/Users/aidan/Desktop/aidan_summer/Week_Tasks/Week_9')
 
     plt.show()
 
