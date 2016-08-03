@@ -41,28 +41,29 @@ def color_conversion(img):
 
 
 def rescale(img):
-    # Rescaling the Image to a unsigned integer for Otsu thresholding method 
-    original_img, mask, eos, rr, cc = segment(img)
-    rescaled_mask = rescale_intensity(mask, out_range=(0, 1))
-    rescale = rescale_intensity(eos, out_range=(0, 1))
-
+    # Rescaling the Image to a unsigned integer for Otsu thresholding method
+    #original_img, mask, dab, rr, cc = segment(img)
+    #b = mask.data
+    #rescaled_mask = rescale_intensity(b, out_range=(0, 1))
+    orig, ihc = color_conversion(img)
+    rescale = rescale_intensity(ihc[:,:, 2], out_range=(0, 1))
     int_img = img_as_uint(rescale)
-    int_mask = img_as_uint(rescaled_mask)
 
-    return int_img, int_mask
+    #int_mask_data = img_as_uint(rescaled_mask)
+
+    return int_img # , int_mask_data
 
 
 def create_bin(img):  # otsu_method=True):
     # Binary image created from Threshold, then labelling is done on this image
     # if otsu_method:
-    int_img, masked_int = rescale(img)
+    int_img = rescale(img)
     t_otsu = threshold_otsu(int_img)
     bin_img = (int_img >= t_otsu)
-    bin_masked = (masked_int >= t_otsu)
     float_img = img_as_float(bin_img)
-    float_masked = img_as_float(bin_masked)
+    # float_masked = img_as_float(bin_masked)
 
-    return float_img, float_masked
+    return float_img  # , float_masked
 
 
 def segment(img):
@@ -78,9 +79,10 @@ def segment(img):
     bin = remove_small_holes(binar, min_size=200000, connectivity=2)
     bin1 = remove_small_objects(bin, min_size=40000, connectivity=2)
     bin2 = gaussian(bin1, sigma=3)
+    bin3 = (bin2 > 0)
 
     eosin = IHC[:, :, 2]
-    edges = canny(bin2)
+    edges = canny(bin3)
     coords = np.column_stack(np.nonzero(edges))
 
     model, inliers = ransac(coords, CircleModel, min_samples=3, residual_threshold=1, max_trials=1000)
@@ -91,18 +93,20 @@ def segment(img):
                               shape=im.shape)
     a, b = model.params[0], model.params[1]
     r = model.params[2]
-    ny, nx = eosin.shape
+    ny, nx = bin3.shape
     ix, iy = np.meshgrid(np.arange(nx), np.arange(ny))
     distance = np.sqrt((ix - b)**2 + (iy - a)**2)
 
-    mask = np.ma.masked_where(distance > r, eosin)
+    mask = np.ma.masked_where(distance > r, bin3)
 
-    return im, mask, eosin, rr, cc
+    return distance, r
 
 
 def label_img(img):
     # Labelling the nests is done using connected components
-    img, masked_img = create_bin(img)
+    img1 = create_bin(img)
+    dist, radius = segment(img)  #'''fix'''
+    masked_img = np.ma.masked_where(dist > radius, img1)
     min_nest_size = 100  # Size in Pixels of minimum nest
     min_hole_size = 500  # Size in Pixels of minimum hole
 
@@ -110,27 +114,29 @@ def label_img(img):
     rem_holes = remove_small_holes(labeled_img, min_size=min_hole_size, connectivity=2)
     labeled_img1 = remove_small_objects(rem_holes, min_size=min_nest_size, connectivity=2)
     labeled = label(labeled_img1, connectivity=2, background=0)
+    mask_lab = np.ma.masked_where(dist > radius, labeled)
+
 
     print labeled
-    return labeled
+    return labeled, masked_img, mask_lab
 
 
 def display_image(img):
     # Displaying images if needed
     original, ihc_images = color_conversion(img)
-    bin_images, bin_masked = create_bin(img)
-    im, in_mask = rescale(img)
-    im, mask, eos, rr, cc = segment(img)
-    labeled_img = label_img(img)
+    bin_images = create_bin(img)
+    im = rescale(img)
+    #mask = segment(img)
+    labeled_img, mask, mask_lab = label_img(img)
     n = len(np.unique(labeled_img)) - 1
 
     plt.figure()
     plt.subplot(141)
-    plt.imshow(in_mask, cmap='gray')
+    plt.imshow(mask, cmap='gray')
     plt.title("DAB color space")
 
     plt.subplot(142)
-    plt.imshow(labeled_img, cmap=plt.cm.spectral)
+    plt.imshow(mask_lab, cmap=plt.cm.spectral)
     plt.title("Labeled Image %d" % n)
 
     plt.subplot(143)
@@ -138,7 +144,7 @@ def display_image(img):
     plt.title('Overlay Outlines')
 
     plt.subplot(144)
-    plt.imshow(mask, cmap='gray')
+    plt.imshow(original, cmap='gray')
     plt.title('Full Punch Segmentation')
 
 
@@ -147,8 +153,8 @@ def display_image(img):
 
 def get_data(img):
     # Obtaining the data for each nest
-    labels = label_img(img)
-    props = regionprops(labels)
+    labels, mask, mask_label = label_img(img)
+    props = regionprops(mask_label)
 
     area = []
     perimeter = []
@@ -228,8 +234,14 @@ def main():
 
 
     png_hist = '/Users/aidan/Desktop/aidan_summer/Week_Tasks/Week_9/tma-extracted/tma_extracted_png'
-    test_hist = '/Users/aidan/Desktop/aidan_summer/Week_Tasks/Week_9/test'  # Path with image files (png)
+    test_hist = '/Users/aidan/Desktop/aidan_summer/Week_Tasks/Week_12/failure_test'  # Path with image files (png)
     path = '/Users/aidan/Desktop/aidan_summer/Week_Tasks/Week_9/save_images/' # Path to save CSV file
+
+    ### Uncomment this to run - Raquel
+    #test_hist = '/Users/engs1348/Raquel/Nottingham-TMAs/tma-extracted'
+    #png_hist = '/Users/engs1348/Raquel/Nottingham-TMAs/tma-extracted'
+    #path = '/Users/engs1348/Raquel/githubRepositoryWorkingFiles/Histology_Aidan'
+
     img_set = test_hist # Image set that is to be analyzed
     img_files = glob.glob(img_set + '/*.png')
 
@@ -315,7 +327,9 @@ def main():
 
     print output_data
 
-    write_csv(output_data, save_path='/Users/aidan/Desktop/aidan_summer/Week_Tasks/Week_9')
+    #write_csv(output_data, save_path='/Users/aidan/Desktop/aidan_summer/Week_Tasks/Week_9')
+    ##output_path = '/Users/engs1348/Raquel/githubRepositoryWorkingFiles/Histology_Aidan'
+    #write_csv(output_data, save_path=output_path)
 
     plt.show()
 
