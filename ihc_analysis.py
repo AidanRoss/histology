@@ -20,7 +20,8 @@ from skimage.measure import regionprops, ransac, CircleModel
 from skimage.morphology import label, remove_small_objects, remove_small_holes
 from skimage.filters import gaussian, threshold_otsu
 from skimage.feature import peak_local_max, canny
-from skimage.draw import circle_perimeter
+# from skimage.draw import circle_perimeter
+# from skimage import io; io.use_plugin('matplotlib')
 
 from scipy import ndimage as ndi
 
@@ -76,13 +77,27 @@ def punch(img):
 
     float_im, orig, ihc = create_bin(img)
     gray = rgb2grey(orig)
-    smooth = gaussian(gray, sigma=1)
-    thresh = 0.88
-    binar = (smooth <= thresh)
+    smooth = gaussian(gray, sigma=3)
 
-    bin = remove_small_holes(binar, min_size=200000, connectivity=2)
-    bin1 = remove_small_objects(bin, min_size=40000, connectivity=2)
-    bin2 = gaussian(bin1, sigma=1)
+    shape = np.shape(gray)
+    l = shape[0]
+    w = shape[1]
+
+    x = l - 20
+    y = w - 20
+
+    rows = np.array([[x, x, x], [x + 1, x + 1, x + 1]])
+    columns = np.array([[y, y, y], [y + 1, y + 1, y + 1]])
+
+    corner = gray[rows, columns]
+
+    thresh = np.mean(corner)
+    print thresh
+    binar = (smooth < thresh - 0.01)
+
+    bin = remove_small_holes(binar, min_size=100000, connectivity=2)
+    bin1 = remove_small_objects(bin, min_size=5000, connectivity=2)
+    bin2 = gaussian(bin1, sigma=3)
     bin3 = (bin2 > 0)
 
     # eosin = IHC[:, :, 2]
@@ -126,13 +141,13 @@ def label_img(img):
 
     print labeled
 
-    return labeled, masked_img, orig, ihc, bin3
+    return labeled, masked_img, orig, ihc, bin3, float_img
 
 
 def display_image(img):
     # Displaying images if needed
 
-    labeled_img, masked_img, orig, ihc, bin3 = label_img(img)
+    labeled_img, masked_img, orig, ihc, bin3, float_img = label_img(img)
     n = len(np.unique(labeled_img)) - 1
 
     plt.figure()
@@ -159,7 +174,7 @@ def display_image(img):
 def get_data(img):
     # Obtaining the data for each nest
     cf = 0.53
-    labels, mask, orig, ihc, bin3 = label_img(img)
+    labels, mask, orig, ihc, bin3, float_img = label_img(img)
     props = regionprops(labels)
 
     area = []
@@ -219,8 +234,9 @@ def write_csv(output_data, save_path):
 def save_image(save_path, img):  # overlay=True, binary=False, DAB=False):
     # If needed the images can be saved for further analysis of examination
     original_img, ihc_img = color_conversion(img)
-    l_img = label_img(img)
+    l_img, masked_img, orig, ihc, bin3, float_img = label_img(img)
     orig = os.path.basename(os.path.normpath(img))
+    # plt.imshow(mark_boundaries(orig, label_img=labeled_img, color=(1, 0, 0)))
     img_file = mark_boundaries(original_img, label_img=l_img, color=(1, 0, 0))
     # img_file = l_img
     filename = save_path + '/Segments' + orig  # 'Labelled_%s' % + ".png"  # '%s' % img
@@ -240,15 +256,15 @@ def main():
 
 
     png_hist = '/Users/aidan/Desktop/aidan_summer/Week_Tasks/Week_9/tma-extracted/tma_extracted_png'
-    test_hist = '/Users/aidan/Desktop/aidan_summer/Week_Tasks/Week_12/test'  # Path with image files (png)
-    path = '/Users/aidan/Desktop/aidan_summer/Week_Tasks/Week_9/save_images/' # Path to save CSV file/ images
+    test_hist = '/Users/aidan/Desktop/aidan_summer/Week_Tasks/Week_9/tma-extracted/tma_ex'  #tma-extracted/tma_extracted_png'  # Path with image files (png)
+    path = '/Users/aidan/Desktop/aidan_summer/Week_Tasks/Week_9/save_images/segment1/' # Path to save CSV file
 
     ### Uncomment this to run - Raquel
     #test_hist = '/Users/engs1348/Raquel/Nottingham-TMAs/tma-extracted'
     #png_hist = '/Users/engs1348/Raquel/Nottingham-TMAs/tma-extracted'
     #path = '/Users/engs1348/Raquel/githubRepositoryWorkingFiles/Histology_Aidan'
 
-    img_set = test_hist  # Image set that is to be analyzed
+    img_set = png_hist  # Image set that is to be analyzed
     img_files = glob.glob(img_set + '/*.png')
 
     output_name = []
@@ -278,12 +294,12 @@ def main():
     std_dev_circularity = []
 
     for im in img_files:
-        display_image(im)
-    #     save_image(save_path=path, img=im)
+        # display_image(im)
+        save_image(save_path=path, img=im)
         nest, area, perimeter, eccentricity, filled_area, avg_area, avg_perim, avg_eccen, avg_filled, roundness,\
         circularity, avg_roundness, avg_circularity, tot_area, tot_perim, std_area, std_perimeter, std_eccentricity,\
         std_filled_area, std_roundness, std_circularity, name = get_data(im)
-
+        
         output_name.append(name)
         output_nest.append(nest)
         output_area.append(area)
@@ -298,10 +314,10 @@ def main():
         out_avg_filled.append(avg_filled)
         out_avg_roundness.append(avg_roundness)
         out_avg_circularity.append(avg_circularity)
-
+        
         out_tot_area.append(tot_area)
         out_tot_perim.append(tot_perim)
-
+        
         std_dev_area.append(std_area)
         std_dev_perimeter.append(std_perimeter)
         std_dev_eccentricity.append(std_eccentricity)
